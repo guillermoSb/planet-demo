@@ -40,7 +40,7 @@ debugObject.noiseRoughness = 0.8;
 debugObject.noiseCenter = new THREE.Vector3();
 debugObject.noiseLayers = 4;
 debugObject.noisePersistence = 0.324;
-debugObject.baseRoughness = 1.765;
+debugObject.baseRoughness = 1.027;
 debugObject.minValue = 0.816;
 
 
