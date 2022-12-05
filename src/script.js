@@ -5,9 +5,15 @@ import {mergeVertices} from 'three/examples/jsm/utils/BufferGeometryUtils'
 import * as dat from 'lil-gui'
 import { createNoise3D } from 'simplex-noise';
 
+
+import fragmentShader from './shaders/fragmentShader.glsl';
+import vertexShader from './shaders/vertexShader.glsl';
+
 let noise3D = createNoise3D();
+let textureLoader = new THREE.TextureLoader();
 
-
+let texture = textureLoader.load('./gradient.png')
+texture.generateMipmaps = false;
 
 // Canvas
 const canvas = document.querySelector('#canvas')
@@ -83,13 +89,10 @@ window.addEventListener('resize', () =>
 /**
  * Objects
  */
-
-// create a simple square shape. We duplicate the top left and bottom right
-// vertices because each vertex needs to appear once per triangle.
+let min = null;
+let max = null;
 let group = new THREE.Group()
 const createFace = (resolution = 10, localUp = new THREE.Vector3(0,0,1)) => {
-	const geometry = new THREE.BufferGeometry();
-		
 
 	const axisA = new THREE.Vector3(localUp.y, localUp.z, localUp.x)
 	const axisB = localUp.clone().cross(axisA)
@@ -120,9 +123,17 @@ const createFace = (resolution = 10, localUp = new THREE.Vector3(0,0,1)) => {
 				amplitude *= debugObject.noisePersistence
 			}
 			noiseValue = Math.max(0, noiseValue - debugObject.minValue)
-			const elevation = noiseValue * debugObject.noiseStrength;
-			
-			vertices[i] = pointOnUnitSphere.multiplyScalar(debugObject.radius).multiplyScalar(1 + elevation);
+			const elevation =  ((noiseValue * debugObject.noiseStrength) + 1) * debugObject.radius;
+			if (min == null || max == null) {
+				min = elevation;
+				max = elevation;
+			}
+			if (elevation > max) {
+				max = elevation;
+			} else if (elevation < min) {
+				min = elevation;
+			}
+			vertices[i] = pointOnUnitSphere.multiplyScalar(elevation)
 			
 			if (x != resolution - 1 && y != resolution - 1) {
 				triangles[triIndex] = i;
@@ -143,38 +154,52 @@ const createFace = (resolution = 10, localUp = new THREE.Vector3(0,0,1)) => {
 		tempPos.push(vertices[triangle].y)
 		tempPos.push(vertices[triangle].z)
 	}
-	
-	const positions = new Float32Array(tempPos)
-	
-	geometry.setAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
-
-	geometry.computeVertexNormals()
-	const material = new THREE.MeshStandardMaterial({
-		color: debugObject.color,
-		wireframe: debugObject.wireframe,
-		metalness: 0.2,
-		roughness: 0.6,		
-	});
-	const mesh = new THREE.Mesh(geometry, material);
-	
-	group.add(mesh)
+	return tempPos;
 }
 // createFace(4, new THREE.Vector3(0,1,0))
 
 
 const createSphere = () => {
-
+	min = null;
+	max = null;
 	for (let i = 0; i < group.children.length; i++) {
 		group.children[i].mesh.dispose();
 		group.children[i].material.dispose();
 		scene.remove(group.children[i])
 	}
-	createFace(debugObject.resolution, new THREE.Vector3(1,0,0))
-	createFace(debugObject.resolution, new THREE.Vector3(0,1,0))
-	createFace(debugObject.resolution, new THREE.Vector3(0,0,1))
-	createFace(debugObject.resolution, new THREE.Vector3(-1,0,0))
-	createFace(debugObject.resolution, new THREE.Vector3(0,-1,0))
-	createFace(debugObject.resolution, new THREE.Vector3(0,0,-1))
+	const allPositions = [
+	...createFace(debugObject.resolution, new THREE.Vector3(1,0,0)),
+	...createFace(debugObject.resolution, new THREE.Vector3(0,1,0)),
+	...createFace(debugObject.resolution, new THREE.Vector3(0,0,1)),
+	...createFace(debugObject.resolution, new THREE.Vector3(-1,0,0)),
+	...createFace(debugObject.resolution, new THREE.Vector3(0,-1,0)),
+	...createFace(debugObject.resolution, new THREE.Vector3(0, 0, -1))
+	]
+	console.log(min,max)
+	const geometry = new THREE.BufferGeometry();
+	geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(allPositions),3))
+	geometry.computeVertexNormals()
+	const material = new THREE.ShaderMaterial({
+		vertexShader,
+		fragmentShader,
+		uniforms: {
+		
+			uMinHeight: {
+				value: min
+			},
+			uMaxHeight: {
+				value: max
+			},
+			uTexture: {
+				value: texture
+			}
+		},
+		wireframe: debugObject.wireframe
+	});
+	const mesh = new THREE.Mesh(geometry, material);
+	
+	
+	group.add(mesh)
 	
 }
 
